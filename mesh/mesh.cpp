@@ -122,14 +122,11 @@ const Mesh::ParamMatcher Mesh::obj_param_matcher{
             iss >> buf; // v/vt/vn v v/vt v//vn
             list<string_view> tokens;
             split(buf, tokens, '/');
-            if (tokens.size() == 1) {
-                s.vertexId[i] = svto<int>(tokens.front()) - 1;
-            } else if (tokens.size() == 2) {
-                s.vertexId[i] = svto<int>(tokens.front()) - 1;
+            s.vertexId[i] = svto<int>(tokens.front()) - 1; // vertex-id is mandatory
+            if (tokens.size() == 2) {
                 s.textureId[i] = svto<int>(tokens.back()) - 1;
             } else {
                 const auto &vt_str_view = *next(tokens.begin());
-                s.vertexId[i] = svto<int>(tokens.front()) - 1;
                 if (!vt_str_view.empty()) s.textureId[i] = svto<int>(vt_str_view) - 1;
                 s.normalId[i] = svto<int>(tokens.back()) - 1;
             }
