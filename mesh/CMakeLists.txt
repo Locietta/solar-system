@@ -8,7 +8,7 @@ target_include_directories(
     INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
     PRIVATE   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-target_link_libraries(mesh PRIVATE OpenGL::GL GLUT::GLUT ${OpenCV_LIBRARIES})
+target_link_libraries(mesh PRIVATE OpenGL::GL OpenGL::GLU GLUT::GLUT ${OpenCV_LIBRARIES})
 target_precompile_headers(mesh PUBLIC ${PROJECT_SOURCE_DIR}/pch/pch.h)
 
 add_executable(test_obj test_obj.cpp)
