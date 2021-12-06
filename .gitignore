@@ -1,0 +1,7 @@
+build
+*.o
+*.exe
+awesome_car.*
+
+.cache
+.vscode
