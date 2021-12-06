@@ -2,7 +2,7 @@
 find_package(OpenGL REQUIRED)
 find_package(OpenCV REQUIRED)
 
-add_library(mesh mesh.cpp)
+add_library(mesh mesh.cpp material.cpp)
 target_include_directories(
     mesh 
     INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}

@@ -1,8 +1,6 @@
 #include "mesh.h"
 #include "string_ext.hpp"
 #include <charconv>
-#include <opencv2/core/mat.hpp>
-#include <opencv2/imgcodecs.hpp>
 
 using namespace std;
 
@@ -29,11 +27,76 @@ inline T svto(string_view sv) { // NOLINT(readability-identifier-naming)
 
 namespace fs = std::filesystem;
 
-static SurfaceGroup curr_surface_group;
+namespace { //< static local global states
+Mesh::SurfaceGroup curr_surface_group;
 
-static string curr_mtl_name;
+string curr_mtl_name;
 
-static fs::path curr_obj_path, curr_mtllib_path;
+fs::path curr_obj_path, curr_mtllib_path;
+} // namespace
+
+void Mesh::fileParser_(fs::path const &path, Mesh &mesh, ParamMatcher const &matcher) {
+    ifstream fin(path);
+    if (!fin) return;
+    while (true) {
+        string line;
+        if (!getline(fin, line)) break; // eof
+        trim(line);
+        if (line.empty()) continue;
+
+        while (line.back() == '\\') { // use `\` to concatenate lines
+            string next_line;
+            if (!getline(fin, next_line)) { // unexpected EOF
+                cerr << "'\\' concatenation expect a new line ..." << endl;
+                exit(1);
+            }
+            line.back() = ' ';
+            trim(next_line);
+            line += next_line;
+        }
+        /// ignore empty line and comments
+        if (line.empty() || line.front() == '#') continue;
+
+        istringstream iss(line);
+        string indicator; // indicate what this line stands for
+        iss >> indicator;
+        auto it = matcher.find(indicator);
+        if (it != matcher.end()) {
+            it->second(mesh, iss); // ignore unsupported indicator
+        }
+    }
+}
+
+Mesh Mesh::loadMesh(std::filesystem::path const &model) {
+    curr_obj_path = model;
+    Mesh mesh;
+    Mesh::fileParser_(model, mesh, obj_param_matcher);
+    return mesh;
+}
+
+void Mesh::renderMesh(const Mesh &mesh, float zoom) {
+    for (const auto &f_group : mesh.surfaceGroups) {
+        if (f_group.pMtl != nullptr) {
+            Material::applyMaterial(*f_group.pMtl);
+        }
+        glShadeModel((f_group.smooth) ? GL_SMOOTH : GL_FLAT);
+
+        for (const auto &f : f_group) {
+            glBegin(GL_TRIANGLES);
+            for (int i = 0; i < 3; ++i) {
+                if (f.normalId[i] != -1) {
+                    glNormal3fv(value_ptr(mesh.normals[f.normalId[i]]));
+                }
+                if (f.textureId[i] != -1) {
+                    glTexCoord3fv(value_ptr(mesh.texture[f.textureId[i]]));
+                }
+                glVertex3fv(value_ptr(mesh.vertices[f.vertexId[i]] * zoom));
+            }
+            glEnd();
+        }
+        glBindTexture(GL_TEXTURE_2D, 0); // switch to default texture
+    }
+}
 
 // clang-format off
 const Mesh::ParamMatcher Mesh::obj_param_matcher{
@@ -141,108 +204,12 @@ const Mesh::ParamMatcher Mesh::mtl_param_matcher {
         string temp;
         getline(iss, temp);
         trim(temp); // so if there's space in path, it'll be safe
-        // temp = '"' + temp + '"';
         fs::path texture_path = temp; 
 
         if (texture_path.is_relative()) {
             texture_path = curr_mtllib_path.parent_path() / texture_path;
         }
-        cv::Mat img = cv::imread(texture_path.string());
-        cv::flip(img, img, 0);
-	    glEnable(GL_TEXTURE_2D);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glGenTextures(1, &m.mtlPool_[curr_mtl_name].mapKd);
-        glBindTexture(GL_TEXTURE_2D, m.mtlPool_[curr_mtl_name].mapKd);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        gluBuild2DMipmaps(GL_TEXTURE_2D, 3, img.cols, img.rows, GL_BGR_EXT, GL_UNSIGNED_BYTE, img.data);
-        // glTexImage2D(GL_TEXTURE_2D, 0, 3, img.cols, img.rows, 0, GL_BGR_EXT, GL_UNSIGNED_BYTE, img.data);
-        glBindTexture(GL_TEXTURE_2D, 0); // switch back to default texture
-        img.release();
+        Material::loadTexture(m.mtlPool_[curr_mtl_name].mapKd, texture_path);
     }},
 };
 // clang-format on
-
-void Mesh::fileParser_(fs::path const &path, Mesh &mesh, ParamMatcher const &matcher) {
-    ifstream fin(path);
-    if (!fin) return;
-    while (true) {
-        string line;
-        if (!getline(fin, line)) break; // eof
-        trim(line);
-        if (line.empty()) continue;
-
-        while (line.back() == '\\') { // use `\` to concatenate lines
-            string next_line;
-            if (!getline(fin, next_line)) { // unexpected EOF
-                cerr << "'\\' concatenation expect a new line ..." << endl;
-                exit(1);
-            }
-            line.back() = ' ';
-            trim(next_line);
-            line += next_line;
-        }
-        /// ignore empty line and comments
-        if (line.empty() || line.front() == '#') continue;
-
-        istringstream iss(line);
-        string indicator; // indicate what this line stands for
-        iss >> indicator;
-        auto it = matcher.find(indicator);
-        if (it != matcher.end()) {
-            it->second(mesh, iss); // ignore unsupported indicator
-        }
-    }
-}
-
-Mesh Mesh::loadMesh(std::filesystem::path const &model) {
-    curr_obj_path = model;
-    Mesh mesh;
-    Mesh::fileParser_(model, mesh, obj_param_matcher);
-    return mesh;
-}
-
-void Material::applyMaterial(const Material &mtl) {
-    glMaterialfv(GL_FRONT, GL_AMBIENT, value_ptr(mtl.ambient));
-    glMaterialfv(GL_FRONT, GL_DIFFUSE, value_ptr(mtl.diffuse));
-    glMaterialfv(GL_FRONT, GL_SPECULAR, value_ptr(mtl.specular));
-    glMaterialfv(GL_FRONT, GL_EMISSION, value_ptr(mtl.emssion));
-    glMaterialf(GL_FRONT, GL_SHININESS, mtl.Ns);
-    glBindTexture(GL_TEXTURE_2D, mtl.mapKd);
-    glEnable(GL_TEXTURE_2D);
-}
-
-void Material::clearMaterial() {
-    Material default_mtl;
-    applyMaterial(default_mtl);
-}
-
-void Mesh::renderMesh(const Mesh &mesh, float zoom) {
-    for (const auto &f_group : mesh.surfaceGroups) {
-        if (f_group.pMtl != nullptr) {
-            Material::applyMaterial(*f_group.pMtl);
-        }
-        glShadeModel((f_group.smooth) ? GL_SMOOTH : GL_FLAT);
-
-        for (const auto &f : f_group) {
-            glBegin(GL_TRIANGLES);
-            for (int i = 0; i < 3; ++i) {
-                if (f.normalId[i] != -1) {
-                    glNormal3fv(value_ptr(mesh.normals[f.normalId[i]]));
-                }
-                if (f.textureId[i] != -1) {
-                    glTexCoord3fv(value_ptr(mesh.texture[f.textureId[i]]));
-                }
-                glVertex3fv(value_ptr(mesh.vertices[f.vertexId[i]] * zoom));
-            }
-            glEnd();
-        }
-        glBindTexture(GL_TEXTURE_2D, 0); // switch to default texture
-    }
-}
-
-Material::~Material() {
-    glDeleteTextures(4, &(this->mapKa)); // delete all textures
-}
