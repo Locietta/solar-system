@@ -1,9 +1,9 @@
-cmake_minimum_required(VERSION 3.16.0)
+cmake_minimum_required(VERSION 3.21.0)
 
-if (MSVC) # set your vcpkg path here
+# uncomment this if you're using `vcpkg` for MSVC
+# 
 set(CMAKE_TOOLCHAIN_FILE D:/vcpkg/scripts/buildsystems/vcpkg.cmake 
   CACHE STRING "Vcpkg toolchain file")
-endif(MSVC)
 
 project(solar VERSION 0.2.0)
 
@@ -20,7 +20,7 @@ enable_testing()
 find_package(GLUT REQUIRED)
 find_package(OpenGL REQUIRED)
 
-add_subdirectory(mesh)
+add_subdirectory(meshL)
 add_subdirectory(scene_gl_utility)
 
 add_executable(solar solar.cpp star.cpp)
