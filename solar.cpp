@@ -5,6 +5,7 @@
 
 using namespace std;
 using namespace glm;
+using namespace loia;
 
 static Mesh car;
 Camera camera{-0.15, 1.14, {-72, 3, 36.5}, {0, 1, 0}};

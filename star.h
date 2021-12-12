@@ -10,7 +10,7 @@ struct Star {
     GLfloat year = 0, day = 0, radius;
     GLfloat yearStep, dayStep;
 
-    Material mtl;
+    loia::Material mtl;
 
     glm::vec3 rotate, spin;
     glm::vec3 offset;
@@ -20,7 +20,7 @@ struct Star {
 
     std::vector<Star> satellite = {};
 
-    Star(GLfloat radius, GLfloat yearStep, GLfloat dayStep, const Material &mtl, glm::vec3 offset,
+    Star(GLfloat radius, GLfloat yearStep, GLfloat dayStep, const loia::Material &mtl, glm::vec3 offset,
          glm::vec3 rotate = {0.0, 0.5, 0.5}, glm::vec3 spin = {0.0, 1.0, 0.0})
         : radius(radius), yearStep(yearStep), dayStep(dayStep), mtl(mtl), rotate(rotate),
           spin(spin), offset(offset) {}

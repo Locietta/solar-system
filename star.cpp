@@ -3,6 +3,7 @@
 #include <glm/ext/matrix_transform.hpp>
 
 using namespace glm;
+using namespace loia;
 
 void Star::bindSatellite(std::initializer_list<Star> satellites) {
     for (const auto &sate : satellites) {
