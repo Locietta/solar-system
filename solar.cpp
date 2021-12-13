@@ -2,6 +2,8 @@
 #include "mesh.h"
 #include "star.h"
 #include <glm/geometric.hpp>
+#include <opencv2/core/mat.hpp>
+#include <opencv2/imgcodecs.hpp>
 
 using namespace std;
 using namespace glm;
@@ -26,26 +28,34 @@ Material sun_m  {.specular{1.0, 0.0, 0.0}, .emssion{1, 0, 0}},
     saturn_s1_m {.specular{0.2, 0.4, 0.6}, .emssion{0.3, 0.6, 1}};
 // clang-format on
 
-// 水星、金星、地球、火星、木星、土星、天王星、和海王星
+
+// 水星、金星、地球、火星、木星、土星、天王星、海王星
 // adam,hesper,earth,mars,jupiter,saturn,uranus,neptune
-static Star sun(10, 0, 10.0, sun_m, {-15, 0, 0}),
-    adam(0.5, 1.2, 10.0, adam_m, {0.2, 0, 0}, {0, 0.6, 0.4}),
-    hesper(0.8, 1, 10.0, hesper_m, {0.8, 0, 0}, {0, 0.5, 0.45}),
-    earth(0.5, 0.8, 10.0, earth_m, {2, 0, 0}),
-    mars(0.6, 0.6, 10.0, mars_m, {7, 0, 0}, {0, 0.4, 0.5}),
-    jupiter(2, 0.5, 10.0, jupiter_m, {13, 0, 0}, {0, 0.48, 0.52}),
-    saturn(1.4, 0.4, 10.0, saturn_m, {20, 0, 0}, {0, 0.45, 0.6}),
-    uranus(1.5, 0.3, 10.0, uranus_m, {28, 0, 0}, {0, 0.4, 0.65}),
-    neptune(1.3, 0.2, 10.0, neptune_m, {32, 0, 0}, {0, 0.65, 0.3}),
-    moon(0.25, 0.3, 0.03, moon_m, {2, 0, 0}, {0, 1, 0}),
-    mars_s1(0.1, 1.5, 0, mars_s1_m, {1, 0, 0}, {0, 1, 0}),
-    mars_s2(0.2, 0.7, 0, mars_s2_m, {1.5, 0, 0}, {0, 1, 0}),
-    jupiter_s1(0.6, 0.5, 0, jupiter_s1_m, {3, 0, 0}, {0, 1, 0}),
-    saturn_s1(0.4, 0.4, 0, saturn_s1_m, {2.7, 0, 0}, {0, 1, 0});
+static Star sun(10, 0, 10.0, nullptr, {-15, 0, 0}),
+    adam(0.5, 1.2, 10.0, &adam_m, {0.2, 0, 0}, {0, 0.6, 0.4}),
+    hesper(0.8, 1, 10.0, &hesper_m, {0.8, 0, 0}, {0, 0.5, 0.45}),
+    earth(0.5, 0.8, 10.0, &earth_m, {2, 0, 0}),
+    mars(0.6, 0.6, 10.0, &mars_m, {7, 0, 0}, {0, 0.4, 0.5}),
+    jupiter(2, 0.5, 10.0, &jupiter_m, {13, 0, 0}, {0, 0.48, 0.52}),
+    saturn(1.4, 0.4, 10.0, &saturn_m, {20, 0, 0}, {0, 0.45, 0.6}),
+    uranus(1.5, 0.3, 10.0, &uranus_m, {28, 0, 0}, {0, 0.4, 0.65}),
+    neptune(1.3, 0.2, 10.0, &neptune_m, {32, 0, 0}, {0, 0.65, 0.3}),
+    moon(0.25, 0.3, 0.03, &moon_m, {2, 0, 0}, {0, 1, 0}),
+    mars_s1(0.1, 1.5, 0, &mars_s1_m, {1, 0, 0}, {0, 1, 0}),
+    mars_s2(0.2, 0.7, 0, &mars_s2_m, {1.5, 0, 0}, {0, 1, 0}),
+    jupiter_s1(0.6, 0.5, 0, &jupiter_s1_m, {3, 0, 0}, {0, 1, 0}),
+    saturn_s1(0.4, 0.4, 0, &saturn_s1_m, {2.7, 0, 0}, {0, 1, 0});
 
 static Star *stars[] = {&sun, &adam, &hesper, &earth, &mars, &jupiter, &saturn, &uranus, &neptune};
+static MaterialPool mtl_pool;
+
+void applyMtl(const loia::Material &mtl);
+void texBind(GLuint &tex, std::filesystem::path const &texFile);
 
 void init() {
+    loia::Material::tex_binder_default = texBind;
+    loia::Material::apply_cb_default = applyMtl;
+
     glClearColor(0.0, 0.0, 0.0, 0.0);
     glShadeModel(GL_SMOOTH);
     glEnable(GL_COLOR);
@@ -59,6 +69,8 @@ void init() {
     saturn.bindSatellite({saturn_s1});
     saturn.bindTorus(0.1, 3.0);
     car = Mesh::loadMesh("../assets/simple_car.obj"); // simple car modeled by mesh
+    mtl_pool = loadMaterialPool("../assets/stars.mtl");
+    sun.mtl = &mtl_pool["SUN"];
     // car = Mesh::loadMesh("../assets/cubic");
     // car = Mesh::loadMesh("../assets/awesome_car"); // 350+MB, take ~1min to load it
 }
@@ -168,4 +180,32 @@ int main(int argc, char **argv) {
 
     glutMainLoop();
     return 0;
+}
+
+void texBind(GLuint &tex, std::filesystem::path const &texFile) {
+    cv::Mat img = cv::imread(texFile.string());
+    cv::flip(img, img, 0);
+    glEnable(GL_TEXTURE_2D);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    gluBuild2DMipmaps(GL_TEXTURE_2D, 3, img.cols, img.rows, GL_BGR_EXT, GL_UNSIGNED_BYTE, img.data);
+    // glTexImage2D(GL_TEXTURE_2D, 0, 3, img.cols, img.rows, 0, GL_BGR_EXT, GL_UNSIGNED_BYTE,
+    // img.data);
+    glBindTexture(GL_TEXTURE_2D, 0); // switch back to default texture
+    img.release();
+}
+
+void applyMtl(const loia::Material &mtl) {
+    glMaterialfv(GL_FRONT, GL_AMBIENT, value_ptr(mtl.ambient));
+    glMaterialfv(GL_FRONT, GL_DIFFUSE, value_ptr(mtl.diffuse));
+    glMaterialfv(GL_FRONT, GL_SPECULAR, value_ptr(mtl.specular));
+    glMaterialfv(GL_FRONT, GL_EMISSION, value_ptr(mtl.emssion));
+    glMaterialf(GL_FRONT, GL_SHININESS, mtl.Ns);
+    glBindTexture(GL_TEXTURE_2D, mtl.mapKd);
+    glEnable(GL_TEXTURE_2D);
 }
